@@ -7,8 +7,6 @@
 #include <vector>
 #include<iostream>
 
-using Segment = std::tuple<int, int, int, int>;
-
 class WatchmanRoute : public AlgoritamBaza{
 public:
     WatchmanRoute(QWidget *pCrtanje,
@@ -32,14 +30,14 @@ private:
     void decomposePolygon();
     void decomposeToBalanced();
     void trimPath();
-    std::vector<int> selectAppropriateAligns();
+    std::vector<QLine> selectAppropriateAligns();
     void createFinalRoute();
 
     std::vector<QPoint> vertices;
     std::vector<QRect> rectangles;
     std::vector<QRect> balancedPolygons;
-    std::vector<int> alignSegmentsY;
-    std::vector<Segment> route;
+    std::vector<QLine> route;
+    std::vector<QLine> alignSegmentsY;
 };
 
 #endif // WATCHMANROUTE_H

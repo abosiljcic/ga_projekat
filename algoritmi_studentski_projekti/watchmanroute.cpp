@@ -132,12 +132,12 @@ void WatchmanRoute::trimPath()
 
         balancedPolygons = trimmedPath;
 }
-std::vector<int> WatchmanRoute::selectAppropriateAligns()
-{
-    size_t n = balancedPolygons.size();
-    std::vector<int> alignYValues(n);
 
-    // Initialize M and m vectors
+std::vector<QLine> WatchmanRoute::selectAppropriateAligns() {
+    size_t n = balancedPolygons.size();
+    std::vector<QLine> alignYValues;
+
+    // Initialize vectors to store the max and min Y values for each polygon
     std::vector<int> M(n), m(n);
 
     // Get the min and max y-values of a rectangle
@@ -154,56 +154,59 @@ std::vector<int> WatchmanRoute::selectAppropriateAligns()
         m[i] = maxY;
     }
 
-    // For first sub-polygon
-    alignYValues[0] = (M[0] < M[1]) ? M[0] : m[0];
+    // Select alignment points
     for (size_t i = 0; i < n; ++i) {
-        // For middle sub-polygons
-        if (M[i - 1] < M[i] && M[i] > M[i + 1]) {
-            alignYValues[i] = m[i];
-        }
-        else {
-            alignYValues[i] = M[i];
-        }
-    }
+        int yValue;
+        if (i == 0) {
+            // For the first polygon, start at the top
+            yValue = (M[0] < M[1]) ? M[0] : m[0];
+        } else if (i == n - 1) {
+            // For the last polygon, end at the bottom
+            yValue = (M[n-1] < M[n - 2]) ? M[n-1] : m[n-1];
+        } else {
+            // For middle polygons, choose the most optimal y-value based on adjacent polygons
 
-    // For last sub-polygon
-    alignYValues[n-1] = (M[n-1] < M[n - 2]) ? M[n-1] : m[n-1];
+            if (M[i - 1] < M[i] && M[i] > M[i + 1]) {
+                yValue = m[i];  // Prefer to align to the top
+            } else {
+                yValue = M[i];  // Otherwise, align to the bottom
+            }
+        }
+
+        alignYValues.push_back(QLine(balancedPolygons[i].left(), yValue, balancedPolygons[i].right(), yValue));
+    }
 
     return alignYValues;
 }
 
-void WatchmanRoute::createFinalRoute()
-{
-    std::vector<int> alignYValues = selectAppropriateAligns();
 
+void WatchmanRoute::createFinalRoute() {
     size_t n = balancedPolygons.size();
-    if (n == 0 || alignYValues.size() != n) return;
+    if (n == 0) return; // No polygons to process
 
-    // Create align segments
-    std::vector<Segment> alignSegments;
+    // Get the align segments
+    std::vector<QLine> alignSegments = selectAppropriateAligns();
+
+    // Initialize the route
+    QPoint currentPoint(balancedPolygons[0].left(), alignSegments[0].y1());
+
     for (size_t i = 0; i < n; ++i) {
-        int x1 = balancedPolygons[i].left();
-        int x2 = balancedPolygons[i].right();
-        int y = alignYValues[i];
-        alignSegments.emplace_back(x1, y, x2, y);
+        QPoint nextPoint(balancedPolygons[i].right(), alignSegments[i].y1());
+
+        // Horizontal line to cover the width of the current polygon
+        route.push_back(QLine(currentPoint, nextPoint));
+        currentPoint = nextPoint;
+
+        // If there's a next polygon, add a vertical line to align with the next segment
+        if (i < n - 1) {
+            QPoint verticalMove(nextPoint.x(), alignSegments[i + 1].y1());
+            route.push_back(QLine(currentPoint, verticalMove));
+            currentPoint = verticalMove;
+        }
     }
-
-    // Create the route by connecting align segments
-    for (size_t i = 0; i < n - 1; ++i) {
-        // Add horizontal segment for align[i]
-        route.push_back(alignSegments[i]);
-
-        // Add vertical segment connecting align[i] to align[i+1]
-        int x1 = std::get<2>(alignSegments[i]); // right x of current segment
-        int y1 = std::get<3>(alignSegments[i]); // y of current segment
-        int x2 = std::get<0>(alignSegments[i+1]); // left x of next segment
-        int y2 = std::get<1>(alignSegments[i+1]); // y of next segment
-        route.emplace_back(x1, y1, x2, y2);
-    }
-
-    // Add the last align segment
-    route.push_back(alignSegments.back());
 }
+
+
 
 void WatchmanRoute::pokreniAlgoritam()
 {
@@ -264,19 +267,18 @@ void WatchmanRoute::drawBalancedPolygons(QPainter* painter) const
         for (const QRect &rect : balancedPolygons) {
             painter->drawRect(rect);
         }
-    }
+}
+
 
 void WatchmanRoute::drawRoute(QPainter* painter) const
 {
     QPen pen(Qt::red);
-    pen.setWidth(1);
+    pen.setWidth(5);
     painter->setPen(pen);
 
-    for (const auto& segment : route)
+    for (const auto& line : route)
     {
-        int x1, y1, x2, y2;
-        std::tie(x1, y1, x2, y2) = segment;
-        painter->drawLine(x1, y1, x2, y2);
+        painter->drawLine(line);
     }
 }
 
@@ -286,9 +288,9 @@ void WatchmanRoute::drawAlignSegment(QPainter* painter) const
     pen.setWidth(2);
     painter->setPen(pen);
 
-    for (int y : alignSegmentsY)
+    for (QLine y : alignSegmentsY)
     {
-        painter->drawLine(0, y, _pCrtanje->width(), y);
+        painter->drawLine(y);
     }
 }
 
